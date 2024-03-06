@@ -7,14 +7,16 @@ import {
   BatchWriteItemCommand,
   DeleteItemCommand,
   GetItemCommand,
+  PutItemCommand,
   QueryCommand,
   ScanCommand,
+  UpdateItemCommand,
   type AttributeValue,
   type DynamoDBClient,
   type QueryCommandInput,
   type ScanCommandInput,
 } from '@aws-sdk/client-dynamodb';
-import { unmarshall } from '@aws-sdk/util-dynamodb';
+import { marshall, unmarshall } from '@aws-sdk/util-dynamodb';
 
 
 export class DynamoDBAdapter implements Adapter {
@@ -162,11 +164,52 @@ export class DynamoDBAdapter implements Adapter {
   }
 
   public async setSession(databaseSession: DatabaseSession): Promise<void> {
-    /** TODO */
+    await this.client.send(new PutItemCommand({
+      TableName: this.tableName,
+      Item: marshall({
+        [this.pk]: `USER#${databaseSession.userId}`,
+        [this.sk]: `SESSION#${databaseSession.id}`,
+        [this.expiresAt]: Math.floor(databaseSession.expiresAt.getTime() / 1000).toString(),
+        [this.gsi1pk]: `SESSION#${databaseSession.id}`,
+        [this.gsi1sk]: `SESSION#${databaseSession.id}`,
+        ...databaseSession.attributes,
+      }),
+    }));
   }
 
   public async updateSessionExpiration(sessionId: string, expiresAt: Date): Promise<void> {
-    /** TODO */
+    // get key of the session to update
+    const sessionRes = await this.client.send(new QueryCommand({
+      TableName: this.tableName,
+      IndexName: this.gsiName,
+      KeyConditionExpression: '#gsi1pk = :gsi1pk AND #gsi1sk = :gsi1sk',
+      ExpressionAttributeNames: {
+        '#gsi1pk': this.gsi1pk,
+        '#gsi1sk': this.gsi1sk,
+      },
+      ExpressionAttributeValues: {
+        ':gsi1pk': { S: `SESSION#${sessionId}` },
+        ':gsi1sk': { S: `SESSION#${sessionId}` },
+      },
+    }));
+    if (!sessionRes?.Items?.length) return;
+    const session = this.itemToSession(sessionRes.Items[0]);
+
+    // update the session
+    await this.client.send(new UpdateItemCommand({
+      TableName: this.tableName,
+      Key: {
+        [this.pk]: { S: `USER#${session.userId}` },
+        [this.sk]: { S: `SESSION#${sessionId}` },
+      },
+      UpdateExpression: 'SET #expiresAt = :expiresAt',
+      ExpressionAttributeNames: {
+        '#expiresAt': this.expiresAt,
+      },
+      ExpressionAttributeValues: {
+        ':expiresAt': { N: Math.floor(expiresAt.getTime() / 1000).toString() },
+      },
+    }));
   }
 
   public async deleteExpiredSessions(): Promise<void> {
