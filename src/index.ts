@@ -21,13 +21,15 @@ import { marshall, unmarshall } from '@aws-sdk/util-dynamodb';
 
 export class DynamoDBAdapter implements Adapter {
   private client: DynamoDBClient;
-  private tableName: string = 'LuciaAuthName';
+  private tableName: string = 'LuciaAuthTable';
   private pk: string = 'pk';
   private sk: string = 'sk';
   private gsiName: string = 'GSI1';
   private gsi1pk: string = 'GSI1PK';
   private gsi1sk: string = 'GSI1SK';
   private expiresAt: string = 'expiresAt';
+  private extraUserAttributes: string[] = [];
+  private extraSessionAttributes: string[] = [];
 
   constructor(client: DynamoDBClient, options?: {
     tableName?: string;
@@ -37,6 +39,8 @@ export class DynamoDBAdapter implements Adapter {
     gsi1pk?: string;
     gsi1sk?: string;
     expiresAt?: string;
+    extraUserAttributes?: string[];
+    extraSessionAttributes?: string[];
   }) {
     this.client = client;
     if (options?.tableName) this.tableName = options.tableName;
@@ -46,13 +50,29 @@ export class DynamoDBAdapter implements Adapter {
     if (options?.gsi1pk) this.gsi1pk = options.gsi1pk;
     if (options?.gsi1sk) this.gsi1sk = options.gsi1sk;
     if (options?.expiresAt) this.expiresAt = options.expiresAt;
+    if (options?.extraUserAttributes) {
+      this.extraUserAttributes = [
+        ...this.extraUserAttributes,
+        ...options.extraUserAttributes,
+      ];
+    }
+    if (options?.extraSessionAttributes) {
+      this.extraSessionAttributes = [
+        ...this.extraSessionAttributes,
+        ...options.extraSessionAttributes,
+      ];
+    }
   }
 
   public async deleteSession(sessionId: string): Promise<void> {
+    // get key of the session to delete
+    const [session, user] = await this.getSessionAndUser(sessionId);
+    if (!session) return;
+
     await this.client.send(new DeleteItemCommand({
       TableName: this.tableName,
       Key: {
-        [this.pk]: { S: `SESSION#${sessionId}` },
+        [this.pk]: { S: `USER#${session.userId}` },
         [this.sk]: { S: `SESSION#${sessionId}` },
       },
     }));
@@ -142,7 +162,6 @@ export class DynamoDBAdapter implements Adapter {
     do {
       const commandInput: QueryCommandInput = {
         TableName: this.tableName,
-        KeyConditionExpression: '#pk = :pk AND begins_with(#sk, :sk_prefix)',
         ExpressionAttributeNames: {
           '#pk': this.pk,
           '#sk': this.sk,
@@ -151,11 +170,12 @@ export class DynamoDBAdapter implements Adapter {
           ':pk': { S: `USER#${userId}` },
           ':sk_prefix': { S: 'SESSION#' },
         },
+        KeyConditionExpression: '#pk = :pk AND begins_with(#sk, :sk_prefix)',
       };
       if (_lastEvaluatedKey) commandInput.ExclusiveStartKey = _lastEvaluatedKey;
       const res = await this.client.send(new QueryCommand(commandInput));
       if (res?.Items?.length) {
-        sessions.push(...res.Items.map(this.itemToSession));
+        sessions.push(...res.Items.map((x) => this.itemToSession(x)));
       }
       _lastEvaluatedKey = res?.LastEvaluatedKey;
     } while (_lastEvaluatedKey)
@@ -216,7 +236,6 @@ export class DynamoDBAdapter implements Adapter {
     // get all expired session keys to delete
     let _lastEvaluatedKey: Record<string, AttributeValue> | undefined = undefined;
     const keys = [];
-    const now = Math.floor(Date.now() / 1000);
 
     do {
       const commandInput: ScanCommandInput = {
@@ -224,22 +243,25 @@ export class DynamoDBAdapter implements Adapter {
         ExpressionAttributeNames: {
           '#pk': this.pk,
           '#sk': this.sk,
-          '#expiresAt': this.expiresAt,
+          '#expires_at': this.expiresAt,
         },
         ExpressionAttributeValues: {
           ':sk_prefix': { S: 'SESSION#' },
-          ':now': { N: now.toString() },
         },
-        FilterExpression: 'begins_with(#sk, :sk_prefix) AND #expiresAt < :now',
+        FilterExpression: 'begins_with(#sk, :sk_prefix)', // unable to use two filters in the same scan?
         Select: 'SPECIFIC_ATTRIBUTES',
-        ProjectionExpression: '#pk, #sk',
+        ProjectionExpression: '#pk, #sk, #expires_at',
       }
       if (_lastEvaluatedKey) commandInput.ExclusiveStartKey = _lastEvaluatedKey;
       const res = await this.client.send(new ScanCommand(commandInput));
       if (res?.Items?.length) {
-        keys.push(...res.Items.map((item) => ({
-          [this.pk]: item[this.pk],
-          [this.sk]: item[this.sk],
+        const expiredSessions = res.Items
+          .map((x) => unmarshall(x))
+          .filter((x) => x[this.expiresAt] < Math.floor(Date.now() / 1000));
+
+        keys.push(...expiredSessions.map((x) => ({
+          [this.pk]: { S: x[this.pk] },
+          [this.sk]: { S: x[this.sk] },
         })));
       }
       _lastEvaluatedKey = res?.LastEvaluatedKey;
@@ -264,8 +286,18 @@ export class DynamoDBAdapter implements Adapter {
     const {
       [this.pk]: pk,
       [this.sk]: sk,
-      ...attributes
+      [this.gsi1pk]: gsi1pk,
+      [this.gsi1sk]: gsi1sk,
+      ...rest
     } = unmarshalled;
+
+    const attributes = {};
+    for (const key in rest) {
+      if (!this.extraUserAttributes.includes(key)) {
+        Object.assign(attributes, { [key]: rest[key] });
+      }
+    }
+
     return {
       id: pk.split('#')[1],
       attributes,
@@ -277,13 +309,23 @@ export class DynamoDBAdapter implements Adapter {
     const {
       [this.pk]: pk,
       [this.sk]: sk,
+      [this.gsi1pk]: gsi1pk,
+      [this.gsi1sk]: gsi1sk,
       [this.expiresAt]: expiresAt,
-      ...attributes
+      ...rest
     } = unmarshalled;
+
+    const attributes = {};
+    for (const key in rest) {
+      if (!this.extraSessionAttributes.includes(key)) {
+        Object.assign(attributes, { [key]: rest[key] });
+      }
+    }
+
     return {
       id: sk.split('#')[1],
       userId: pk.split('#')[1],
-      expiresAt: new Date(expiresAt * 1000),
+      expiresAt: new Date(parseInt(expiresAt) * 1000),
       attributes,
     };
   }

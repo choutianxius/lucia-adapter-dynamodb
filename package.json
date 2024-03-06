@@ -26,6 +26,8 @@
     "@aws-sdk/client-dynamodb": "^3.525.0",
     "@aws-sdk/util-dynamodb": "^3.525.0",
     "@lucia-auth/adapter-test": "^5.0.0",
+    "@types/node": "^20.11.25",
+    "dotenv": "^16.4.5",
     "lucia": "^3.0.1",
     "tsx": "^4.7.1"
   },
