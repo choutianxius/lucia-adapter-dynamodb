@@ -1,0 +1,33 @@
+{
+  "name": "lucia-adapter-dynamodb",
+  "version": "0.0.0",
+  "description": "A DynamoDB adapter for lucia-auth",
+  "main": "dist/index.js",
+  "type": "module",
+  "scripts": {
+    "test": "tsx tests/index.ts"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/choutianxius/lucia-adapter-dynamodb.git"
+  },
+  "keywords": [
+    "lucia-auth",
+    "adapter",
+    "DynamoDB"
+  ],
+  "author": "choutianxius",
+  "license": "MIT",
+  "bugs": {
+    "url": "https://github.com/choutianxius/lucia-adapter-dynamodb/issues"
+  },
+  "homepage": "https://github.com/choutianxius/lucia-adapter-dynamodb#readme",
+  "devDependencies": {
+    "@lucia-auth/adapter-test": "^5.0.0",
+    "lucia": "^3.0.1",
+    "tsx": "^4.7.1"
+  },
+  "peerDependencies": {
+    "lucia": "3.x"
+  }
+}

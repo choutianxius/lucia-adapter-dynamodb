@@ -1,0 +1,1 @@
+# A DynamoDB Adapter For [lucia-auth](https://github.com/lucia-auth/lucia)
