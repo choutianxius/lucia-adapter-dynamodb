@@ -10,17 +10,6 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 20
-      - name: 'Install dependencies'
-        run: npm ci
-      - name: 'Login to docker hub'
-        run: echo ${{ secrets.DOCKERHUB_PASSWORD }} | docker login -u ${{ secrets.DOCKERHUB_USER }} --password-stdin
-      - name: 'Start local DynamoDB database'
-        run: docker compose -f ./tests/dynamodb.yml up --detach && sleep 5
-      - run: npm run test
-        env:
-          DYNAMODB_ENDPOINT_URL: 'http://127.0.0.1:8000'
-      - name: 'Stop local DynamoDB database'
-        run: docker compose -f ./tests/dynamodb.yml down
+
+      - name: 'Run test'
+        run: docker compose run --rm app npm run test

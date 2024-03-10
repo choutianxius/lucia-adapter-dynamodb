@@ -1,0 +1,19 @@
+version: '3'
+
+services:
+  dynamodb:
+    image: amazon/dynamodb-local:latest
+    command: '-jar DynamoDBLocal.jar -sharedDb -dbPath ./data'
+    container_name: dynamodb-local
+    ports:
+      - 8000:8000
+    volumes:
+      - ./docker/dynamodb:/home/dynamodblocal/data
+    working_dir: /home/dynamodblocal
+  app:
+    build:
+      context: .
+    depends_on:
+      - dynamodb
+    environment:
+      DYNAMODB_ENDPOINT_URL: http://dynamodb:8000
