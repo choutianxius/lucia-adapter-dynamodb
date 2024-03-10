@@ -34,6 +34,7 @@ async function prepareDB(client: DynamoDBClient) {
     .then(() => console.log('Detected existing auth table!'))
     .catch(async (e) => {
       if (e instanceof ResourceNotFoundException) {
+        console.log('Wait for table creation to complete...');
         return await client
           .send(new CreateTableCommand({
             TableName,
@@ -65,7 +66,6 @@ async function prepareDB(client: DynamoDBClient) {
             },
           }))
           .then(() => new Promise((resolve) => {
-            console.log('Wait for table creation to complete...');
             setTimeout(() => resolve(
               console.log('Successfully created auth table!')
             ), 3000); // wait for table creation completion
