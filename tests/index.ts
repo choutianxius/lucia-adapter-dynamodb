@@ -11,23 +11,22 @@ import { marshall } from '@aws-sdk/util-dynamodb';
 
 const TableName = 'LuciaAuthTable';
 
-const client = new DynamoDBClient({
-  credentials: {
-    accessKeyId: 'dummy',
-    secretAccessKey: 'dummy',
-  },
-  region: 'dummy',
-  endpoint: process.env.DYNAMODB_ENDPOINT_URL ?? 'http://127.0.0.1:8000',
-});
+await new Promise<DynamoDBClient>((resolve) => {
+  console.log('Wait for 5 seconds so that db can be ready...')
+  // wait for 5 seconds so that db can be ready
+  setTimeout(() => resolve(new DynamoDBClient({
+    credentials: {
+      accessKeyId: 'dummy',
+      secretAccessKey: 'dummy',
+    },
+    region: 'dummy',
+    endpoint: process.env.DYNAMODB_ENDPOINT_URL ?? 'http://127.0.0.1:8000',
+  })), 5000);
+})
+  .then((client) => prepareTable(client))
+  .then((adapter) => testAdapter(adapter));
 
-const adapter = new DynamoDBAdapter(client, {
-  tableName: TableName,
-});
-
-await prepareDB(client).then(() => testAdapter(adapter)); 
-
-
-async function prepareDB(client: DynamoDBClient) {
+async function prepareTable(client: DynamoDBClient) {
   console.log('\n\x1B[38;5;63;1m[prepare]  \x1B[0mPreparing local DynamoDB table\x1B[0m\n');
   // create table if not exists
   await client.send(new DescribeTableCommand({ TableName }))
@@ -89,4 +88,8 @@ async function prepareDB(client: DynamoDBClient) {
     }).then(() => {
       console.log('Successfully created test user!');
     });
+
+  return new DynamoDBAdapter(client, {
+    tableName: TableName,
+  });
 }
