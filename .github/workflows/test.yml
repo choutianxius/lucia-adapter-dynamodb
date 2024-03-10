@@ -18,7 +18,7 @@ jobs:
       - name: 'Login to docker hub'
         run: echo ${{ secrets.DOCKERHUB_PASSWORD }} | docker login -u ${{ secrets.DOCKERHUB_USER }} --password-stdin
       - name: 'Start local DynamoDB database'
-        run: docker compose -f ./tests/dynamodb.yml up --detach
+        run: docker compose -f ./tests/dynamodb.yml up --detach && sleep 5
       - run: npm run test
         env:
           DYNAMODB_ENDPOINT_URL: 'http://127.0.0.1:8000'
