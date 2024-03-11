@@ -3,7 +3,7 @@
 ## Install
 
 ```shell
-npm install lucia-auth-dynamodb
+npm i lucia-adapter-dynamodb
 ```
 
 ## Usage
