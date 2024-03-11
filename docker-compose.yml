@@ -13,5 +13,8 @@ services:
       context: .
     depends_on:
       - dynamodb
+    working_dir: /home/app
+    volumes:
+      - ./dist:/home/app/dist
     environment:
       DYNAMODB_ENDPOINT_URL: http://dynamodb:8000
