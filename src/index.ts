@@ -9,12 +9,10 @@ import {
   GetItemCommand,
   PutItemCommand,
   QueryCommand,
-  ScanCommand,
   UpdateItemCommand,
   type AttributeValue,
   type DynamoDBClient,
   type QueryCommandInput,
-  type ScanCommandInput,
 } from '@aws-sdk/client-dynamodb';
 import { marshall, unmarshall } from '@aws-sdk/util-dynamodb';
 
@@ -22,12 +20,14 @@ import { marshall, unmarshall } from '@aws-sdk/util-dynamodb';
 export class DynamoDBAdapter implements Adapter {
   private client: DynamoDBClient;
   private tableName: string = 'LuciaAuthTable';
-  private pk: string = 'pk';
-  private sk: string = 'sk';
-  private gsiName: string = 'GSI1';
+  private pk: string = 'PK';
+  private sk: string = 'SK';
+  private gsi1Name: string = 'GSI1';
   private gsi1pk: string = 'GSI1PK';
   private gsi1sk: string = 'GSI1SK';
-  private expiresAt: string = 'expiresAt';
+  private gsi2Name: string = 'GSI2';
+  private gsi2pk: string = 'GSI2PK';
+  private gsi2sk: string = 'GSI2SK';
   private extraUserAttributes: string[] = [];
   private extraSessionAttributes: string[] = [];
 
@@ -35,10 +35,12 @@ export class DynamoDBAdapter implements Adapter {
     tableName?: string;
     pk?: string;
     sk?: string;
-    gsiName?: string,
+    gsi1Name?: string,
     gsi1pk?: string;
     gsi1sk?: string;
-    expiresAt?: string;
+    gsi2Name?: string,
+    gsi2pk?: string;
+    gsi2sk?: string;
     extraUserAttributes?: string[];
     extraSessionAttributes?: string[];
   }) {
@@ -46,10 +48,12 @@ export class DynamoDBAdapter implements Adapter {
     if (options?.tableName) this.tableName = options.tableName;
     if (options?.pk) this.pk = options.pk;
     if (options?.sk) this.sk = options.sk;
-    if (options?.gsiName) this.gsiName = options.gsiName;
+    if (options?.gsi1Name) this.gsi1Name = options.gsi1Name;
     if (options?.gsi1pk) this.gsi1pk = options.gsi1pk;
     if (options?.gsi1sk) this.gsi1sk = options.gsi1sk;
-    if (options?.expiresAt) this.expiresAt = options.expiresAt;
+    if (options?.gsi2Name) this.gsi2Name = options.gsi2Name;
+    if (options?.gsi2pk) this.gsi2pk = options.gsi2pk;
+    if (options?.gsi2sk) this.gsi2sk = options.gsi2sk;
     if (options?.extraUserAttributes) {
       this.extraUserAttributes = [
         ...this.extraUserAttributes,
@@ -128,7 +132,7 @@ export class DynamoDBAdapter implements Adapter {
   ): Promise<[session: DatabaseSession | null, user: DatabaseUser | null]> {
     const sessionRes = await this.client.send(new QueryCommand({
       TableName: this.tableName,
-      IndexName: this.gsiName,
+      IndexName: this.gsi1Name,
       KeyConditionExpression: '#gsi1pk = :gsi1pk AND #gsi1sk = :gsi1sk',
       ExpressionAttributeNames: {
         '#gsi1pk': this.gsi1pk,
@@ -189,9 +193,10 @@ export class DynamoDBAdapter implements Adapter {
       Item: marshall({
         [this.pk]: `USER#${databaseSession.userId}`,
         [this.sk]: `SESSION#${databaseSession.id}`,
-        [this.expiresAt]: Math.floor(databaseSession.expiresAt.getTime() / 1000).toString(),
         [this.gsi1pk]: `SESSION#${databaseSession.id}`,
         [this.gsi1sk]: `SESSION#${databaseSession.id}`,
+        [this.gsi2pk]: 'SESSION_EXPIRES',
+        [this.gsi2sk]: databaseSession.expiresAt.toISOString(),
         ...databaseSession.attributes,
       }),
     }));
@@ -201,7 +206,7 @@ export class DynamoDBAdapter implements Adapter {
     // get key of the session to update
     const sessionRes = await this.client.send(new QueryCommand({
       TableName: this.tableName,
-      IndexName: this.gsiName,
+      IndexName: this.gsi1Name,
       KeyConditionExpression: '#gsi1pk = :gsi1pk AND #gsi1sk = :gsi1sk',
       ExpressionAttributeNames: {
         '#gsi1pk': this.gsi1pk,
@@ -222,12 +227,12 @@ export class DynamoDBAdapter implements Adapter {
         [this.pk]: { S: `USER#${session.userId}` },
         [this.sk]: { S: `SESSION#${sessionId}` },
       },
-      UpdateExpression: 'SET #expiresAt = :expiresAt',
+      UpdateExpression: 'SET #gsi2sk = :gsi2sk',
       ExpressionAttributeNames: {
-        '#expiresAt': this.expiresAt,
+        '#gsi2sk': this.gsi2sk,
       },
       ExpressionAttributeValues: {
-        ':expiresAt': { N: Math.floor(expiresAt.getTime() / 1000).toString() },
+        ':gsi2sk': { S: expiresAt.toISOString() },
       },
     }));
   }
@@ -238,27 +243,27 @@ export class DynamoDBAdapter implements Adapter {
     const keys = [];
 
     do {
-      const commandInput: ScanCommandInput = {
+      const commandInput: QueryCommandInput = {
         TableName: this.tableName,
+        IndexName: this.gsi2Name,
         ExpressionAttributeNames: {
           '#pk': this.pk,
           '#sk': this.sk,
-          '#expires_at': this.expiresAt,
+          '#gsi2pk': this.gsi2pk,
+          '#gsi2sk': this.gsi2sk,
         },
         ExpressionAttributeValues: {
-          ':sk_prefix': { S: 'SESSION#' },
+          ':gsi2pk': { S: 'SESSION_EXPIRES' },
+          ':gsi2sk_end': { S: new Date().toISOString() },
         },
-        FilterExpression: 'begins_with(#sk, :sk_prefix)', // unable to use two filters in the same scan?
+        KeyConditionExpression: '#gsi2pk = :gsi2pk AND #gsi2sk < :gsi2sk_end',
         Select: 'SPECIFIC_ATTRIBUTES',
-        ProjectionExpression: '#pk, #sk, #expires_at',
+        ProjectionExpression: '#pk, #sk',
       }
       if (_lastEvaluatedKey) commandInput.ExclusiveStartKey = _lastEvaluatedKey;
-      const res = await this.client.send(new ScanCommand(commandInput));
+      const res = await this.client.send(new QueryCommand(commandInput));
       if (res?.Items?.length) {
-        const expiredSessions = res.Items
-          .map((x) => unmarshall(x))
-          .filter((x) => x[this.expiresAt] < Math.floor(Date.now() / 1000));
-
+        const expiredSessions = res.Items.map((x) => unmarshall(x));
         keys.push(...expiredSessions.map((x) => ({
           [this.pk]: { S: x[this.pk] },
           [this.sk]: { S: x[this.sk] },
@@ -288,6 +293,8 @@ export class DynamoDBAdapter implements Adapter {
       [this.sk]: sk,
       [this.gsi1pk]: gsi1pk,
       [this.gsi1sk]: gsi1sk,
+      [this.gsi2pk]: gsi2pk,
+      [this.gsi2sk]: gsi2sk,
       ...rest
     } = unmarshalled;
 
@@ -311,7 +318,8 @@ export class DynamoDBAdapter implements Adapter {
       [this.sk]: sk,
       [this.gsi1pk]: gsi1pk,
       [this.gsi1sk]: gsi1sk,
-      [this.expiresAt]: expiresAt,
+      [this.gsi2pk]: gsi2pk,
+      [this.gsi2sk]: gsi2sk,
       ...rest
     } = unmarshalled;
 
@@ -325,7 +333,7 @@ export class DynamoDBAdapter implements Adapter {
     return {
       id: sk.split('#')[1],
       userId: pk.split('#')[1],
-      expiresAt: new Date(parseInt(expiresAt) * 1000),
+      expiresAt: new Date(gsi2sk),
       attributes,
     };
   }

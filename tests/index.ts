@@ -38,27 +38,43 @@ async function prepareTable(client: DynamoDBClient) {
           .send(new CreateTableCommand({
             TableName,
             AttributeDefinitions: [
-              { AttributeName: 'pk', AttributeType: 'S' },
-              { AttributeName: 'sk', AttributeType: 'S' },
+              { AttributeName: 'PK', AttributeType: 'S' },
+              { AttributeName: 'SK', AttributeType: 'S' },
               { AttributeName: 'GSI1PK', AttributeType: 'S' },
               { AttributeName: 'GSI1SK', AttributeType: 'S' },
+              { AttributeName: 'GSI2PK', AttributeType: 'S' },
+              { AttributeName: 'GSI2SK', AttributeType: 'S' },
             ],
             KeySchema: [
-              { AttributeName: 'pk', KeyType: 'HASH' }, // primary key
-              { AttributeName: 'sk', KeyType: 'RANGE' }, // sort key
+              { AttributeName: 'PK', KeyType: 'HASH' }, // primary key
+              { AttributeName: 'SK', KeyType: 'RANGE' }, // sort key
             ],
-            GlobalSecondaryIndexes: [{
-              IndexName: 'GSI1',
-              Projection: { ProjectionType: 'ALL' },
-              KeySchema: [
-                { AttributeName: 'GSI1PK', KeyType: 'HASH' }, // GSI primary key
-                { AttributeName: 'GSI1SK', KeyType: 'RANGE' }, // GSI sort key
-              ],
-              ProvisionedThroughput: {
-                ReadCapacityUnits: 5,
-                WriteCapacityUnits: 5,
+            GlobalSecondaryIndexes: [
+              {
+                IndexName: 'GSI1',
+                Projection: { ProjectionType: 'ALL' },
+                KeySchema: [
+                  { AttributeName: 'GSI1PK', KeyType: 'HASH' }, // GSI primary key
+                  { AttributeName: 'GSI1SK', KeyType: 'RANGE' }, // GSI sort key
+                ],
+                ProvisionedThroughput: {
+                  ReadCapacityUnits: 5,
+                  WriteCapacityUnits: 5,
+                },
               },
-            }],
+              {
+                IndexName: 'GSI2',
+                Projection: { ProjectionType: 'ALL' },
+                KeySchema: [
+                  { AttributeName: 'GSI2PK', KeyType: 'HASH' }, // GSI primary key
+                  { AttributeName: 'GSI2SK', KeyType: 'RANGE' }, // GSI sort key
+                ],
+                ProvisionedThroughput: {
+                  ReadCapacityUnits: 5,
+                  WriteCapacityUnits: 5,
+                },
+              },
+            ],
             ProvisionedThroughput: {
               ReadCapacityUnits: 5,
               WriteCapacityUnits: 5,
@@ -78,10 +94,9 @@ async function prepareTable(client: DynamoDBClient) {
       await client.send(new PutItemCommand({
         TableName,
         Item: marshall({
-          pk: `USER#${databaseUser.id}`,
-          sk: `USER#${databaseUser.id}`,
-          GSI1PK : `USER#${databaseUser.id}`,
-          GSI1SK: `USER#${databaseUser.id}`,
+          PK: `USER#${databaseUser.id}`,
+          SK: `USER#${databaseUser.id}`,
+          HashedPassword: '123456',
           ...databaseUser.attributes
         }),
       }));
@@ -91,5 +106,6 @@ async function prepareTable(client: DynamoDBClient) {
 
   return new DynamoDBAdapter(client, {
     tableName: TableName,
+    extraUserAttributes: ['HashedPassword'],
   });
 }
