@@ -48,10 +48,10 @@ The bare minimum requirement is that the partition keys and sort keys of the bas
 
 ### With One GSI
 
-| *(Item Type)* | PK             | SK                   | GSIPK   | GSISK                | ExpiresAt (Non-Key Attribute) |
-| ------------- | -------------- | -------------------- | ------- | -------------------- | ----------------------------- |
-| *User*        | USER#[User ID] | USER#[User ID]       |         |                      |                               |
-| *Session*     | USER#[User ID] | SESSION#[Session ID] | SESSION | SESSION#[Session ID] | [ISO time string]             |
+| *(Item Type)* | PK             | SK                   | GSIPK   | GSISK                | ExpiresAt (*Non-Key Attribute*) |
+| ------------- | -------------- | -------------------- | ------- | -------------------- | ------------------------------- |
+| *User*        | USER#[User ID] | USER#[User ID]       |         |                      |                                 |
+| *Session*     | USER#[User ID] | SESSION#[Session ID] | SESSION | SESSION#[Session ID] | [ISO time string]               |
 
 ### Table Creation Example
 
@@ -147,26 +147,42 @@ await client
 
 ## Constructor Options
 
-After preparing the DynamoDB table, create an instance of `DynamoDBClient` from the [`@aws-sdk/client-dynamodb`](https://docs.aws.amazon.com/AWSJavaScriptSDK/v3/latest/client/dynamodb/) library and pass it to the adapter constructor. A configuration object may be passed as the second parameter, where you can customize the adapter according to your table configurations:
+The adapter constructor takes a `DynamoDBClient` instance from `@aws-sdk/client-dynamodb` as the first argument. A configuration object can be passed as the second argument.
 
 ```typescript
 class DynamoDBAdapter {
-  constructor(client: DynamoDBClient, options?: {
-    tableName?: string;
-    pk?: string; // base table partition key name
-    sk?: string; // base tabe sort key name
-    gsi1Name?: string, // name of the first gsi
-    gsi1pk?: string; // partition key name of the first gsi
-    gsi1sk?: string; // sort key name of the first gsi
-    gsi2Name?: string, // name of the second gsi
-    gsi2pk?: string; // partition key name of the second gsi
-    gsi2sk?: string; // sort key name of the second gsi
-    extraUserAttributes?: string[]; // extra table attributes to be excluded in DatabaseUser
-    extraSessionAttributes?: string[]; // extra table attributes to be excluded in DatabaseSession
-  }) {
-    // ...
-  };
+  constructor(client: DynamoDBClient, options?: DynamoDBAdapterOptions);
 }
 ```
 
-By default, the adapter will include **ALL** existing attribute fields other than the base table/GSI keys in the `attributes` fields of the returned `DatabaseUser` and `DatabaseSession` objects, which may contain extra fields than what you want to grant Lucia access to. To exclude these extra attributes from the user and session objects seen by Lucia, pass their names to the `extraUserAttributes` and `extraSessionAttributes` options.
+The configuration object can be specified as follows:
+
+### With 2 GSIs
+
+| Option Object Attribute | Type     | Default Value  | Usage                                                        |
+| ----------------------- | -------- | -------------- | ------------------------------------------------------------ |
+| tableName               | string   | LuciaAuthTable | DynamoDB table name                                          |
+| pk                      | string   | PK             | Base table partition key name                                |
+| sk                      | string   | SK             | Base table sort key name                                     |
+| gsi1Name                | string   | GSI1           | Index name of the first GSI                                  |
+| gsi1pk                  | string   | GSI1PK         | First GSI partition key name                                 |
+| gsi1sk                  | string   | GSI1SK         | First GSI sort key name                                      |
+| gsi2Name                | string   | GSI2           | Index name of the second GSI                                 |
+| gsi2pk                  | string   | GSI2PK         | Second GSI partition key name                                |
+| gsi2sk                  | string   | GSI2SK         | Second GSI sort key name                                     |
+| extraUserAttributes     | string[] | []             | Names of non-key attributes in the DynamoDB table to be excluded from DatabaseUser objects |
+| extraSessionAttributes  | string[] | []             | Names of non-key attributes in the DynamoDB table to be excluded from DatabaseSession objects |
+
+### With 1 GSI
+
+| Option Object Attribute | Type     | Default Value  | Usage                                                        |
+| ----------------------- | -------- | -------------- | ------------------------------------------------------------ |
+| tableName               | string   | LuciaAuthTable | DynamoDB table name                                          |
+| pk                      | string   | PK             | Base table partition key name                                |
+| sk                      | string   | SK             | Base table sort key name                                     |
+| **gsiName**             | string   | GSI            | Index name of the GSI (**Explicitly set it to a non-empty string to use the one-GSI mode**) |
+| gsipk                   | string   | GSIPK          | GSI partition key name                                       |
+| gsisk                   | string   | GSISK          | GSI sort key name                                            |
+| expiresAt               | string   | ExpiresAt      | Name of the DynamoDB table attribute to store session expirations |
+| extraUserAttributes     | string[] | []             | Names of non-key attributes in the DynamoDB table to be excluded from DatabaseUser objects |
+| extraSessionAttributes  | string[] | []             | Names of non-key attributes in the DynamoDB table to be excluded from DatabaseSession objects |
