@@ -353,7 +353,7 @@ class DynamoDBAdapter1 implements Adapter {
     }
   }
 
-  private itemToUser(item: Record<string, any>): DatabaseUser {
+  private itemToUser(item: Record<string, AttributeValue>): DatabaseUser {
     const unmarshalled = unmarshall(item);
     const {
       [this.pk]: pk,
@@ -664,7 +664,7 @@ class DynamoDBAdapter2 implements Adapter {
     }
   }
 
-  private itemToUser(item: Record<string, any>): DatabaseUser {
+  private itemToUser(item: Record<string, AttributeValue>): DatabaseUser {
     const unmarshalled = unmarshall(item);
     const {
       [this.pk]: pk,

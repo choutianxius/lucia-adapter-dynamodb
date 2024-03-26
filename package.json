@@ -12,7 +12,8 @@
   "type": "module",
   "scripts": {
     "test": "tsx tests/index.ts",
-    "build": "shx rm -rf ./dist/* && tsc"
+    "build": "shx rm -rf ./dist/* && tsc",
+    "lint": "eslint ."
   },
   "repository": {
     "type": "git",
@@ -34,10 +35,12 @@
     "@aws-sdk/util-dynamodb": "^3.525.0",
     "@lucia-auth/adapter-test": "^5.0.0",
     "@types/node": "^20.11.25",
+    "eslint": "^8.57.0",
     "lucia": "^3.0.1",
     "shx": "^0.3.4",
     "tsx": "^4.7.1",
-    "typescript": "^5.4.2"
+    "typescript": "^5.4.2",
+    "typescript-eslint": "^7.4.0"
   },
   "peerDependencies": {
     "lucia": "3.x"
