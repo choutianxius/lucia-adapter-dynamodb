@@ -20,34 +20,52 @@ const client = new DynamoDBClient({
   region: 'xx-xx-#',
 });
 
-const adapter = new DynamoDBAdapter(client, {
+const adapterWithTwoGSIs = new DynamoDBAdapter(client, {
   // options
+});
+
+// or
+const adapterWithOneGSI = new DynamoDBAdapter(client, {
+  gsiName: 'YourGSIName',
+  // other options
 });
 
 // pass the adapter to lucia
 ```
 
-The adapter requires a DynamoDB table with at least two global secondary indexes (GSIs) to work, and the base table key and the GSI keys should all be composite, with partition keys and sort keys belonging to the "S" type. Also, all needed attributes from the base table should be projected to both GSIs.
+## DynamoDB Table Schemas
 
-The schema of the table is deeply inspired by and looks like that of the DynamoDB adapter from [`Auth.js`](https://authjs.dev/reference/adapter/dynamodb):
+The adapter works with a single DynamoDB table and supports two possible table schemas. No matter which schema is used, you always have total flexibility to integrate it with your existing table design, e.g., add other custom attributes, reuse the key attributes for other items, use different names for the key attributes, and reuse the GSIs for custom purposes.
 
-| *(Usage)* | PK             | SK                   | GSI1PK               | GSI1SK               | GSI2PK          | GSI2SK            |
-| --------- | -------------- | -------------------- | -------------------- | -------------------- | --------------- | ----------------- |
-| *User*    | USER#[User ID] | USER#[User ID]       |                      |                      |                 |                   |
-| *Session* | USER#[User ID] | SESSION#[Session ID] | SESSION#[Session ID] | SESSION#[Session ID] | SESSION_EXPIRES | [ISO time string] |
+The bare minimum requirement is that the partition keys and sort keys of the base table and all GSIs must be existent and belong to the "S" type.
 
-The schema is designed make it as easy as possible to integrate the authentication system into an existing DynamoDB table. You have total flexibility to add other custom attributes, reuse the key attributes for other types of records, change the names of key attributes, and reuse the GSIs of user records for custom purposes.
+### With Two GSIs (Default)
+
+| *(Item Type)* | PK             | SK                   | GSI1PK               | GSI1SK               | GSI2PK          | GSI2SK            |
+| ------------- | -------------- | -------------------- | -------------------- | -------------------- | --------------- | ----------------- |
+| *User*        | USER#[User ID] | USER#[User ID]       |                      |                      |                 |                   |
+| *Session*     | USER#[User ID] | SESSION#[Session ID] | SESSION#[Session ID] | SESSION#[Session ID] | SESSION_EXPIRES | [ISO time string] |
+
+### With One GSI
+
+| *(Item Type)* | PK             | SK                   | GSIPK   | GSISK                | ExpiresAt (Non-Key Attribute) |
+| ------------- | -------------- | -------------------- | ------- | -------------------- | ----------------------------- |
+| *User*        | USER#[User ID] | USER#[User ID]       |         |                      |                               |
+| *Session*     | USER#[User ID] | SESSION#[Session ID] | SESSION | SESSION#[Session ID] | [ISO time string]             |
+
+### Table Creation Example
 
 Here is an example of creating such a table with [`@aws-sdk/client-dynamodb`](https://docs.aws.amazon.com/AWSJavaScriptSDK/v3/latest/client/dynamodb/):
 
 ```typescript
 const client = new DynamoDBClient({
-  // options
+  // DynamoDB configs
 });
 
+// with two GSIs
 await client
   .send(new CreateTableCommand({
-    TableName,
+    TableName: 'LuciaAuthTableWithTwoGSIs',
     AttributeDefinitions: [
       { AttributeName: 'PK', AttributeType: 'S' },
       { AttributeName: 'SK', AttributeType: 'S' },
@@ -91,7 +109,43 @@ await client
       WriteCapacityUnits: 5,
     },
   }));
+
+// or, with one GSI
+await client
+  .send(new CreateTableCommand({
+    TableName: 'LuciaAuthTableWithOneGSI',
+    AttributeDefinitions: [
+      { AttributeName: 'PK', AttributeType: 'S' },
+      { AttributeName: 'SK', AttributeType: 'S' },
+      { AttributeName: 'GSIPK', AttributeType: 'S' },
+      { AttributeName: 'GSISK', AttributeType: 'S' },
+    ],
+    KeySchema: [
+      { AttributeName: 'PK', KeyType: 'HASH' }, // primary key
+      { AttributeName: 'SK', KeyType: 'RANGE' }, // sort key
+    ],
+    GlobalSecondaryIndexes: [
+      {
+        IndexName: 'GSI',
+        Projection: { ProjectionType: 'ALL' },
+        KeySchema: [
+          { AttributeName: 'GSIPK', KeyType: 'HASH' }, // GSI primary key
+          { AttributeName: 'GSISK', KeyType: 'RANGE' }, // GSI sort key
+        ],
+        ProvisionedThroughput: {
+          ReadCapacityUnits: 5,
+          WriteCapacityUnits: 5,
+        },
+      },
+    ],
+    ProvisionedThroughput: {
+      ReadCapacityUnits: 5,
+      WriteCapacityUnits: 5,
+    },
+  }));
 ```
+
+## Constructor Options
 
 After preparing the DynamoDB table, create an instance of `DynamoDBClient` from the [`@aws-sdk/client-dynamodb`](https://docs.aws.amazon.com/AWSJavaScriptSDK/v3/latest/client/dynamodb/) library and pass it to the adapter constructor. A configuration object may be passed as the second parameter, where you can customize the adapter according to your table configurations:
 
