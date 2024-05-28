@@ -212,12 +212,12 @@ class DynamoDBAdapter1 implements Adapter {
     }));
     if (!sessionRes?.Items?.length) return [null, null];
     const session = this.itemToSession(sessionRes.Items[0]);
-  
+
     const userRes = await this.client.send(new GetItemCommand({
       TableName: this.tableName,
       Key: {
         [this.pk]: { S: `USER#${session.userId}` },
-        [this.sk]: { S: `USER#${session.userId}` },
+        [this.sk]: { S: `SESSION#${session.id}` },
       },
     }));
     if (!userRes?.Item) return [session, null];
@@ -523,12 +523,12 @@ class DynamoDBAdapter2 implements Adapter {
     }));
     if (!sessionRes?.Items?.length) return [null, null];
     const session = this.itemToSession(sessionRes.Items[0]);
-  
+
     const userRes = await this.client.send(new GetItemCommand({
       TableName: this.tableName,
       Key: {
         [this.pk]: { S: `USER#${session.userId}` },
-        [this.sk]: { S: `USER#${session.userId}` },
+        [this.sk]: { S: `SESSION#${session.id}` },
       },
     }));
     if (!userRes?.Item) return [session, null];
