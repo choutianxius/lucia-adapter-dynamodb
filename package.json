@@ -1,6 +1,6 @@
 {
   "name": "lucia-adapter-dynamodb",
-  "version": "2.1.0",
+  "version": "2.2.0",
   "description": "A DynamoDB adapter for lucia-auth",
   "main": "dist/index.js",
   "module": "dist/index.d.js",
