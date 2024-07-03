@@ -1,11 +1,12 @@
 {
   "name": "lucia-adapter-dynamodb",
-  "version": "2.2.0",
+  "version": "2.2.1",
   "description": "A DynamoDB adapter for lucia-auth",
   "main": "dist/index.js",
-  "module": "dist/index.d.js",
+  "module": "dist/index.js",
+  "types": "dist/index.d.ts",
   "files": [
-    "dist/*",
+    "/dist/",
     "README.md",
     "LICENSE"
   ],
@@ -30,13 +31,15 @@
     "url": "https://github.com/choutianxius/lucia-adapter-dynamodb/issues"
   },
   "homepage": "https://github.com/choutianxius/lucia-adapter-dynamodb#readme",
-  "devDependencies": {
+  "dependencies": {
     "@aws-sdk/client-dynamodb": "^3.525.0",
-    "@aws-sdk/util-dynamodb": "^3.525.0",
+    "@aws-sdk/util-dynamodb": "^3.525.0"
+  },
+  "devDependencies": {
     "@lucia-auth/adapter-test": "^5.0.0",
     "@types/node": "^20.11.25",
     "eslint": "^8.57.0",
-    "lucia": "^3.2",
+    "lucia": "^3.2.0",
     "shx": "^0.3.4",
     "tsx": "^4.7.1",
     "typescript": "^5.4.2",
